@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { supabase } from '../lib/supabase';
-import { User, Session } from '@supabase/supabase-js';
+import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
@@ -55,11 +55,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     fetchSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session) => {
       setSession(session);
       setUser(session?.user || null);
       
-      if (session?.user) {
+      if (session?.user && event !== ('SIGNED_UP' as AuthChangeEvent)) {
         fetchProfile(session.user.id);
       } else {
         setProfile(null);
@@ -74,7 +74,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (userId: string) => {
     try {
-      // Use direct query with error handling and no complex conditions
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -89,7 +88,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Error in profile fetch:', error);
-      // Don't rethrow - just log the error and continue
     } finally {
       setLoading(false);
     }
@@ -130,7 +128,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        // Insert profile using a simplified approach with better error handling
         const { error: profileError } = await supabase
           .from('profiles')
           .insert({
@@ -146,6 +143,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           toast.error('Error creating profile');
           return { error: profileError };
         }
+
+        // Set the profile manually since we're skipping the auto-fetch during SIGNED_UP
+        setProfile({
+          id: '', // Will be updated on next auth state change
+          user_id: data.user.id,
+          full_name: fullName,
+          avatar_url: '',
+          email,
+          role,
+          created_at: new Date().toISOString(),
+        });
 
         toast.success('Account created successfully!');
         navigate('/dashboard');
